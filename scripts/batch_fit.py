@@ -35,13 +35,13 @@ gs = BatchGridSearch(
 
 # Choose hyperparameters for grid search
 hps = {
-    'n_epochs':[25], # int
-    'pred_head':['dot_sig', 'binary'], # 'binary' | 'dot_sig'
+    'n_epochs':[10], # int
+    'pred_head':['dot_sig'], # 'binary' | 'dot_sig'
     'message_passing':['bondwise'], # 'bondwise' | 'bondwise_dict' | None
     'agg':['last'], # 'mean' | 'last' | 'attention' | None
     'd_h_encoder':[50], # int
     'model':['mpnn_dim_red'], # 'mpnn' | 'mpnn_dim_red' | 'ffn' | 'linear'
-    'featurizer':['rxn_rc'], # 'rxn_simple' | 'rxn_rc' | 'mfp'
+    'featurizer':['rxn_rc', 'rxn_rc_dist'], # 'rxn_simple' | 'rxn_rc' | 'rxn_rc_dist' | 'mfp'
     'encoder_depth':[3], # int | None
 }
 

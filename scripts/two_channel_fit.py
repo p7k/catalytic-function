@@ -48,6 +48,7 @@ message_passers = {
 featurizers = {
     'rxn_simple': (RxnRCDataset, SimpleReactionMolGraphFeaturizer, build_dataloader),
     'rxn_rc': (RxnRCDataset, RCVNReactionMolGraphFeaturizer, build_dataloader),
+    'rxn_rc_dist': (RxnRCDataset, RCVNReactionMolGraphFeaturizer, build_dataloader),
     'mfp': (MFPDataset, ReactionMorganFeaturizer, mfp_build_dataloader)
 }
 
@@ -98,8 +99,12 @@ dataset_base, featurizer_base, generate_dataloader = featurizers[hps['featurizer
 if hps['featurizer'] == 'mfp':
     featurizer = featurizer_base(radius=mfp_radius, length=mfp_length)
 else:
+    atom_featurizer = (
+        MultiHotAtomFeaturizer.no_stereo_with_rcs_dist() if 'dist' in hps['featurizer']
+        else MultiHotAtomFeaturizer.no_stereo()
+    )
     featurizer = featurizer_base(
-        atom_featurizer=MultiHotAtomFeaturizer.no_stereo(),
+        atom_featurizer=atom_featurizer,
         bond_featurizer=MultiHotBondFeaturizer()
     )
     dv, de = featurizer.shape
