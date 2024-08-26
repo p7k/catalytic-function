@@ -6,12 +6,12 @@ from chemprop.data import build_dataloader
 from chemprop.models import MPNN
 from chemprop.nn import MeanAggregation, BinaryClassificationFFN, BondMessagePassing
 
-from src.utils import load_json, save_json
-from src.featurizer import SimpleReactionMolGraphFeaturizer, RCVNReactionMolGraphFeaturizer, MultiHotAtomFeaturizer, MultiHotBondFeaturizer, ReactionMorganFeaturizer
-from src.nn import LastAggregation, DotSig, LinDimRed, AttentionAggregation, BondMessagePassingDict
-from src.model import MPNNDimRed, TwoChannelFFN, TwoChannelLinear
-from src.data import RxnRCDatapoint, RxnRCDataset, MFPDataset, mfp_build_dataloader
-from src.cross_validation import load_single_experiment, HyperHyperParams, BatchGridSearch
+from catalytic_function.utils import load_json, save_json
+from catalytic_function.featurizer import SimpleReactionMolGraphFeaturizer, RCVNReactionMolGraphFeaturizer, MultiHotAtomFeaturizer, MultiHotBondFeaturizer, ReactionMorganFeaturizer
+from catalytic_function.nn import LastAggregation, DotSig, LinDimRed, AttentionAggregation, BondMessagePassingDict
+from catalytic_function.model import MPNNDimRed, TwoChannelFFN, TwoChannelLinear
+from catalytic_function.data import RxnRCDatapoint, RxnRCDataset, MFPDataset, mfp_build_dataloader
+from catalytic_function.cross_validation import load_single_experiment, HyperHyperParams, BatchGridSearch
 
 from lightning import pytorch as pl
 from lightning.pytorch.loggers import CSVLogger
@@ -22,7 +22,7 @@ import torch
 import os
 from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
 
-res_dir = "/projects/p30041/spn1560/hiec/artifacts/model_evals/gnn" # TODO this shouldn't be here. Should be set by batch fit/resume
+res_dir = "/projects/b1039/trw7841/hiec/artifacts/model_evals/gnn"
 
 # Aggregation fcns
 aggs = {
@@ -48,6 +48,7 @@ message_passers = {
 featurizers = {
     'rxn_simple': (RxnRCDataset, SimpleReactionMolGraphFeaturizer, build_dataloader),
     'rxn_rc': (RxnRCDataset, RCVNReactionMolGraphFeaturizer, build_dataloader),
+    'rxn_rc_dist': (RxnRCDataset, RCVNReactionMolGraphFeaturizer, build_dataloader),
     'mfp': (MFPDataset, ReactionMorganFeaturizer, mfp_build_dataloader)
 }
 
@@ -98,8 +99,12 @@ dataset_base, featurizer_base, generate_dataloader = featurizers[hps['featurizer
 if hps['featurizer'] == 'mfp':
     featurizer = featurizer_base(radius=mfp_radius, length=mfp_length)
 else:
+    atom_featurizer = (
+        MultiHotAtomFeaturizer.no_stereo_with_rcs_dist() if 'dist' in hps['featurizer']
+        else MultiHotAtomFeaturizer.no_stereo()
+    )
     featurizer = featurizer_base(
-        atom_featurizer=MultiHotAtomFeaturizer.no_stereo(),
+        atom_featurizer=atom_featurizer,
         bond_featurizer=MultiHotBondFeaturizer()
     )
     dv, de = featurizer.shape

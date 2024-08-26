@@ -2,6 +2,7 @@ from typing import Sequence, Union, List, Tuple
 import numpy as np
 from rdkit.Chem import AllChem
 from rdkit.Chem.rdchem import Atom, HybridizationType, Mol, Bond, BondType
+from rdkit.Chem.rdmolops import GetShortestPath
 from chemprop.featurizers.base import VectorFeaturizer, GraphFeaturizer
 from chemprop.data.molgraph import MolGraph
 from chemprop.featurizers.molgraph.mixins import _MolGraphFeaturizerMixin
@@ -56,6 +57,8 @@ class MultiHotAtomFeaturizer(VectorFeaturizer[Atom]):
         hybridizations: Sequence[int],
         atom_map_nums: Union[Sequence[int]] = None,
         chiral_tags: Union[Sequence[int], None] = None,
+        *,
+        with_rcs_dist: bool = False,
     ):
         self.atomic_nums = {j: i for i, j in enumerate(atomic_nums)}
         self.degrees = {i: i for i in degrees}
@@ -68,17 +71,28 @@ class MultiHotAtomFeaturizer(VectorFeaturizer[Atom]):
         self._subfeats = [val for val in vars(self).values() if val]
         subfeat_sizes = [1 + len(elt) for elt in self._subfeats]
         subfeat_sizes.extend([1, 1])
+        self.__with_rcs_dist = with_rcs_dist
+        if with_rcs_dist:
+            subfeat_sizes.extend([1])
         self.__size = sum(subfeat_sizes)
 
     def __len__(self) -> int:
         return self.__size
 
-    def __call__(self, a: Atom | None) -> np.ndarray:
+    def __call__(self, a: Atom | None, *args, **kwargs) -> np.ndarray:
         x = np.zeros(self.__size)
 
         if a is None:
             return x
-        
+
+        def min_distance_from_rcas() -> int:
+            mol = a.GetOwningMol()
+            a_idx = a.GetIdx()
+            return min(
+                len(GetShortestPath(mol, a_idx, rc_idx)) if a_idx != rc_idx else 0
+                for rc_idx in kwargs['rcas']
+            )
+
         feat_dict = {
             'atomic_nums': lambda a : a.GetAtomicNum(),
             'degrees': lambda a: a.GetTotalDegree(),
@@ -98,6 +112,8 @@ class MultiHotAtomFeaturizer(VectorFeaturizer[Atom]):
             i += len(choices) + 1
         x[i] = int(a.GetIsAromatic())
         x[i + 1] = 0.01 * a.GetMass()
+        if self.__with_rcs_dist:
+            x[i + 2] = min_distance_from_rcas()
 
         return x
 
@@ -155,7 +171,7 @@ class MultiHotAtomFeaturizer(VectorFeaturizer[Atom]):
                 HybridizationType.SP3D2,
             ],
         )
-    
+
     @classmethod
     def no_stereo(cls):
         """"""
@@ -174,6 +190,27 @@ class MultiHotAtomFeaturizer(VectorFeaturizer[Atom]):
                 HybridizationType.SP3D,
                 HybridizationType.SP3D2,
             ],
+        )
+
+    @classmethod
+    def no_stereo_with_rcs_dist(cls):
+        """"""
+
+        return cls(
+            atomic_nums=list(range(1, 37)) + [53],
+            degrees=list(range(6)),
+            formal_charges=[-1, -2, 1, 2, 0],
+            num_Hs=list(range(5)),
+            hybridizations=[
+                HybridizationType.S,
+                HybridizationType.SP,
+                HybridizationType.SP2,
+                HybridizationType.SP2D,
+                HybridizationType.SP3,
+                HybridizationType.SP3D,
+                HybridizationType.SP3D2,
+            ],
+            with_rcs_dist=True,
         )
 
     @classmethod
@@ -312,8 +349,8 @@ class SimpleReactionMolGraphFeaturizer(_MolGraphFeaturizerMixin, GraphFeaturizer
         atom_features_extra: np.ndarray | None = None, # TODO: make it so dataloader doesn't assume these args and remove them
         bond_features_extra: np.ndarray | None = None,
     ) -> MolGraph:
-        
-        reactants, products, _ = rxn
+
+        reactants, products, rcs = rxn
         n_atoms_mol = [mol.GetNumAtoms() for mol in reactants + products]
         cumsum_atoms = [sum(n_atoms_mol[:i]) for i in range(len(n_atoms_mol))]
         n_atoms = sum(n_atoms_mol)
@@ -323,6 +360,7 @@ class SimpleReactionMolGraphFeaturizer(_MolGraphFeaturizerMixin, GraphFeaturizer
         V, E, edge_index, _ = self._pre_molgraph(
             reactants,
             products,
+            rcs,
             E,
             n_atoms,
             n_atoms_mol,
@@ -338,6 +376,7 @@ class SimpleReactionMolGraphFeaturizer(_MolGraphFeaturizerMixin, GraphFeaturizer
             self,
             reactants,
             products,
+            rcs,
             E,
             n_atoms,
             n_atoms_mol,
@@ -350,9 +389,9 @@ class SimpleReactionMolGraphFeaturizer(_MolGraphFeaturizerMixin, GraphFeaturizer
 
             # Featurize atom nodes
             V = []
-            for mol in reactants + products:
+            for mol_idx, mol in enumerate(reactants + products):
                 for a in mol.GetAtoms():
-                    V.append(self.atom_featurizer(a))
+                    V.append(self.atom_featurizer(a, rcas=rcs[mol_idx]))
             V = np.array(V, dtype=np.single)
         
         edge_index = [[], []]
@@ -405,6 +444,7 @@ class RCVNReactionMolGraphFeaturizer(SimpleReactionMolGraphFeaturizer):
         V, E, edge_index, edge_i = self._pre_molgraph(
             reactants,
             products,
+            rcs,
             E,
             n_atoms,
             n_atoms_mol,

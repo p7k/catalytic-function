@@ -1,4 +1,12 @@
-from src.utils import construct_sparse_adj_mat, load_embed, load_json
+'''
+TODO
+Set up internal run 
+Toggle on/off when to run with option "resume" defaults to flase
+Call bgs.run(hps) for all returned objects outside of load_from_exp
+
+'''
+
+from catalytic_function.utils import construct_sparse_adj_mat, load_embed, load_json
 import numpy as np
 import pandas as pd
 import os
@@ -9,8 +17,8 @@ from collections import defaultdict
 import subprocess
 from dataclasses import dataclass, asdict, fields
 
-DEFAULT_DATA_DIR = "/projects/p30041/spn1560/hiec/data"
-DEFAULT_SCRATCH_DIR = "/scratch/spn1560"
+DEFAULT_DATA_DIR = "/projects/b1039/trw7841/hiec/data"
+DEFAULT_SCRATCH_DIR = "/scratch/trw7841"
 
 @dataclass
 class BatchScript:
@@ -50,12 +58,12 @@ class BatchScript:
             f"#SBATCH --error=../logs/error/{job_name}",
             f"#SBATCH --mail-type=END",
             f"#SBATCH --mail-type=FAIL",
-            f"#SBATCH --mail-user=stefan.pate@northwestern.edu",
+            f"#SBATCH --mail-user=pasha@u.northwestern.edu",
             f"ulimit -c 0",
-            f"module load python/anaconda3.6",
-            f"module load gcc/9.2.0",
-            f"source activate hiec",
-            f"python -u {self.script} {arg_str}",
+            # f"module load python/anaconda3.6",
+            # f"module load gcc/9.2.0",
+            # f"source activate hiec",
+            f"pixi run --frozen python -u {self.script} {arg_str}",
         ]
 
         if self.partition == 'gengpu':
@@ -206,7 +214,7 @@ class BatchGridSearch:
         return split_guide
             
     def _split_homology(self, X, y):
-        cluster_path = f"/home/spn1560/hiec/data/{self.dataset_name}/{self.toc}_{int(self.split_sim_threshold * 100)}.clstr"
+        cluster_path = f"/home/trw7841/src/catalytic-function/data/{self.dataset_name}/{self.toc}_{int(self.split_sim_threshold * 100)}.clstr"
         
         if not os.path.exists(cluster_path):
             raise ValueError(f"Cluster file does not exist for {self.dataset_name}, {self.toc}, strategy: {self.split_strategy} threshold: {self.split_sim_threshold}")
